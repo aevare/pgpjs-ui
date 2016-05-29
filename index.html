@@ -140,7 +140,7 @@
     <div class="content">
         <div class="input-wrap">
             <label>Keys</label>
-            <select name="keys" class="input"></select> <button class="btn btn-open-modal">+</button>
+            <select name="keys" class="input"></select> <button class="btn btn-open-add">+</button><button class="btn btn-open-gen">Generate</button><button class="btn btn-open-show">Show</button>
         </div>
         <div class="input-wrap">
             <label>Password</label>
@@ -150,15 +150,14 @@
             <label>Message</label>
             <textarea name="message" class="input textarea"></textarea>
         </div>
-        <div class="message-box">
-        </div>
+        <div class="message-box content-message"></div>
         <div class="input-wrap">
             <button class="btn btn-decrypt">Decrypt</button>
             <button class="btn btn-encrypt">Encrpt</button>
         </div>
     </div>
 
-    <div class="overlay">
+    <div class="overlay key-modal">
         <div class="modal">
             <h1>Load Key</h1>
             <div class="input-wrap">
@@ -175,7 +174,47 @@
             </div>
             <div>
                 <button class="btn btn-readkey">Load key</button>
-                <button class="btn btn-close">Cancel</button>
+                <button class="btn btn-close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay generate-modal">
+        <div class="modal">
+            <h1>Generate Key</h1>
+            <div class="input-wrap">
+                <label>Name</label>
+                <input type="text" name="genname" class="input" />
+            </div>
+            <div class="input-wrap">
+                <label>E-mail</label>
+                <input type="text" name="genmail" class="input" />
+            </div>
+            <div class="input-wrap">
+                <label>Passphrase</label>
+                <input type="text" name="genpass" class="input" />
+            </div>
+            <div class="message-box generate-message"></div>
+            <div>
+                <button class="btn btn-genkey">Generate key</button>
+                <button class="btn btn-close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay show-key-modal">
+        <div class="modal">
+            <h1 class="keyviewname"></h1>
+            <div class="input-wrap">
+                <label>Public key</label>
+                <textarea name="keyviewpub" class="textarea input"></textarea>
+            </div>
+            <div class="input-wrap">
+                <label>Private key</label>
+                <textarea name="keyviewpriv" class="textarea input"></textarea>
+            </div>
+            <div>
+                <button class="btn btn-close">Close</button>
             </div>
         </div>
     </div>
@@ -190,8 +229,10 @@
             App.quit();
         }, false);
         /* Message box */
-        var msgBox = document.querySelector('.message-box');
-        PGP.showMsg = function(text){
+        PGP.showMsg = function(text, boxClass){
+            boxClass = boxClass || '.content-message';
+            var msgBox = document.querySelector(boxClass);
+
             msgBox.classList.add('in');
             msgBox.innerText = text;
             setTimeout(function(){
@@ -216,6 +257,13 @@
         populateKeys();
 
         PGP.populateKeys = populateKeys;
+
+
+        PGP.addKey = function(key){
+            PGP.keys.push(key);
+            window.localStorage.keys = JSON.stringify(PGP.keys);
+            PGP.populateKeys();
+        }
     }());
     (function(){
         /* Encrypt / Decrypt message */
@@ -278,6 +326,46 @@
         }, false);
     }());
     (function(){
+        /* Generate new key pair */
+        var btnGenkey = document.querySelector('.btn-genkey');
+
+        btnGenkey.addEventListener('click', function(e){
+            e.preventDefault();
+            var nameEl = document.querySelector('[name="genname"]'),
+                name = nameEl.value,
+                mailEl = document.querySelector('[name="genmail"]'),
+                mail = mailEl.value,
+                passEl = document.querySelector('[name="genpass"]'),
+                pass = passEl.value;
+
+            if(name.length && mail.length && pass.length){
+                var options = {
+                    userIds: [{ name: name, email: mail }],
+                    numBits: 4096,
+                    passphrase: pass
+                };
+
+                PGP.showMsg('Generating keys', '.generate-message');
+
+                openpgp.generateKey(options).then(function(key) {
+                    var privkey = key.privateKeyArmored;
+                    var pubkey = key.publicKeyArmored;
+
+                    PGP.addKey({
+                        name: mail,
+                        privkey: privkey,
+                        pubkey: pubkey
+                    });
+                    PGP.showMsg('Keys generated!', '.generate-message');
+                });
+            }
+            else {
+                PGP.showMsg('Please fill in all inputs', '.generate-message');
+            }
+
+        }, false);
+    }());
+    (function(){
         /* Add new key */
         var btnRead = document.querySelector('.btn-readkey'),
             nameKeyEl = document.querySelector('[name="keyname"]'),
@@ -292,14 +380,12 @@
                 keyname = nameKeyEl.value;
             
             if(keyname.length){
-                PGP.keys.push({
+                PGP.addKey({
                         name: keyname,
                         privkey: privkey,
                         pubkey: pubkey
                     });
 
-                window.localStorage.keys = JSON.stringify(PGP.keys);
-                PGP.populateKeys();
                 PGP.showMsg('PGP key added');
                 PGP.CloseModal();
             }
@@ -308,26 +394,51 @@
     }());
     (function(){
         /* Modal control */
-        var open = document.querySelector('.btn-open-modal'),
-            close = document.querySelector('.btn-close'),
-            modal = document.querySelector('.overlay');
+        var openAdd = document.querySelector('.btn-open-add'),
+            openGen = document.querySelector('.btn-open-gen'),
+            openView = document.querySelector('.btn-open-show'),
+            closeBtns = document.querySelectorAll('.btn-close'),
+            modal = document.querySelectorAll('.overlay');
 
         var closeModal = PGP.CloseModal = function(e){
                 if(e){
                     e.preventDefault();
                 }
-                modal.classList.remove('in');
-            },
-            openModal = PGP.OpenModal = function(e){
-                if(e){
-                    e.preventDefault();
+                for(var i = 0; i < modal.length; i++){
+                    modal[i].classList.remove('in');    
                 }
+            },
+            openKeyView = function(e){
+                e.preventDefault();
+                var viewModal = document.querySelector('.show-key-modal');
+                var select = document.querySelector('[name="keys"]');
+                var ind = select.selectedIndex;
+                var key = PGP.keys[ind];
 
-                modal.classList.add('in');
+                viewModal.querySelector('.keyviewname').innerText = key.name;
+                viewModal.querySelector('[name="keyviewpub"]').value = key.pubkey;
+                viewModal.querySelector('[name="keyviewpriv"]').innerText = key.privkey;
+                viewModal.classList.add('in');
+            },
+            openGenModal = function(e){
+                e.preventDefault();
+                var genModal = document.querySelector('.generate-modal');
+                genModal.classList.add('in');
+            },
+            openKeyAddModal = function(e){
+                e.preventDefault();
+                var keyModal = document.querySelector('.key-modal');
+                keyModal.classList.add('in');
             };
 
-        open.addEventListener('click', openModal, false);
-        close.addEventListener('click', closeModal, false);
+            
+
+        openAdd.addEventListener('click', openKeyAddModal, false);
+        openGen.addEventListener('click', openGenModal, false);
+        openView.addEventListener('click', openKeyView, false);
+        for(var i = 0; i < modal.length; i++){
+            closeBtns[i].addEventListener('click', closeModal, false);
+        }
     }());
     </script>
 </body>
