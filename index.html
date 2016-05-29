@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>PGP JS</title>
+    <script type="text/javascript" src="node_modules/openpgp/dist/openpgp.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-size: 16px;
+            font-family: Arial;
+            margin: 0;
+        }
+        .top-bar {
+            -webkit-user-select: none;
+            -webkit-app-region: drag; 
+            height: 50px;
+            width: 100%; 
+            background: #2980B9;
+        }
+        .top-bar h1 {
+            background: url('pgp-keys.png') no-repeat 5px 5px transparent;
+            background-size: 40px 40px;
+            font-size: 24px;
+            line-height: 50px;
+            margin: 0;
+            padding: 0 12px 0 60px;
+        }
+        .btn-close-window {
+            display: none;
+            float: right;
+            width: 30px;
+            height: 30px;
+            margin: 5px 10px 5px 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            font-size: 30px;
+            color: #333;
+        }
+        .btn-close-window:hover {
+            color: #FFF;
+        }
+        .content {
+            margin: 12px;
+        }
+        .input-wrap {
+            display: block;
+            margin-bottom: 8px;
+        }
+        label {
+            display: block;
+        }
+        .input {
+            line-height: 30px;
+            padding: 0 12px;
+            background: #FFF;
+            border: 1px solid #333;
+            box-shadow: none;
+            border-radius: 3px;
+            min-width: 200px;
+        }
+        select.input {
+            height: 30px;
+        }
+        .textarea {
+            display: block;
+            width: 100%;
+            min-height: 300px;
+            line-height: 1.2em;
+        }
+        .btn {
+            display: inline-block;
+            line-height: 30px;
+            padding: 0 12px;
+            margin: 0 5px 12px 0;
+            background: #FFF;
+            border: 1px solid #333;
+            box-shadow: none;
+            border-radius: 3px;
+        }
+        .overlay {
+            position: absolute;
+            display: none;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            transition: 1s all;
+            opacity: 0;
+        }
+        .message-box {
+            margin-bottom: 20px;
+            opacity: 0;
+            transition: 1s all;
+        }
+        .message-box:before {
+            content: '!';
+            background: #5A5AD2;
+            width: 20px;
+            display: inline-block;
+            line-height: 20px;
+            text-align: center;
+            border-radius: 50%;
+            color: #FFF;
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        .in {
+            display: block;
+            opacity: 1;
+        }
+        .modal {
+            display: block;
+            margin: 50px auto;
+            background: #FFF;
+            width: 60%;
+            padding: 10px;
+            border-radius: 3px;
+            box-shadow: 2px 2px 4px #333, -2px -2px 4px #333;
+        }
+        .modal .textarea {
+            min-height: 100px;
+            height: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <button class="btn-close-window">x</button>
+        <h1>PGP UI</h1>
+    </div>
+    <div class="content">
+        <div class="input-wrap">
+            <label>Keys</label>
+            <select name="keys" class="input"></select> <button class="btn btn-open-modal">+</button>
+        </div>
+        <div class="input-wrap">
+            <label>Password</label>
+            <input type="password" name="password" class="input" />
+        </div>
+        <div class="input-wrap">
+            <label>Message</label>
+            <textarea name="message" class="input textarea"></textarea>
+        </div>
+        <div class="message-box">
+        </div>
+        <div class="input-wrap">
+            <button class="btn btn-decrypt">Decrypt</button>
+            <button class="btn btn-encrypt">Encrpt</button>
+        </div>
+    </div>
+
+    <div class="overlay key-modal">
+        <div class="modal">
+            <h1>Load Key</h1>
+            <div class="input-wrap">
+                <label>Name</label>
+                <input type="text" name="keyname" class="input" />
+            </div>
+            <div class="input-wrap">
+                <label>Private Key</label>
+                <textarea name="privkey" class="input textarea"></textarea>
+            </div>
+            <div class="input-wrap">
+                <label>Public key</label>
+                <textarea name="pubkey" class="input textarea"></textarea>
+            </div>
+            <div>
+                <button class="btn btn-readkey">Load key</button>
+                <button class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay key-modal">
+        <div class="modal">
+            <h1>Load Key</h1>
+            <div class="input-wrap">
+                <label>Name</label>
+                <input type="text" name="keyname" class="input" />
+            </div>
+            <div class="input-wrap">
+                <label>Private Key</label>
+                <textarea name="privkey" class="input textarea"></textarea>
+            </div>
+            <div class="input-wrap">
+                <label>Public key</label>
+                <textarea name="pubkey" class="input textarea"></textarea>
+            </div>
+            <div>
+                <button class="btn btn-readkey">Load key</button>
+                <button class="btn btn-close">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    window.PGP = {};
+    (function(){
+        /* Create quit button */
+        var quitBtn = document.querySelector('.btn-close-window');
+        quitBtn.addEventListener('click', function(e){
+            e.preventDefault();
+            App.quit();
+        }, false);
+        /* Message box */
+        var msgBox = document.querySelector('.message-box');
+        PGP.showMsg = function(text){
+            msgBox.classList.add('in');
+            msgBox.innerText = text;
+            setTimeout(function(){
+                msgBox.innerText = '';
+                msgBox.classList.remove('in');
+            }, 5000);
+        }
+        /* Populate keys */
+        var keys = PGP.keys = window.localStorage.keys ? JSON.parse(window.localStorage.keys) : [];
+        var populateKeys = function(){
+            var select = document.querySelector('[name="keys"]');
+            select.innerHTML = '';
+            var items = [],
+                i = 0,
+                l = keys.length;
+            for(; i < l; i++){
+                items.push('<option>' + keys[i].name + '</option>');
+            }
+
+            select.innerHTML = items.join('');
+        };
+        populateKeys();
+
+        PGP.populateKeys = populateKeys;
+    }());
+    (function(){
+        /* Encrypt / Decrypt message */
+        var textEl = document.querySelector('[name="message"]'),
+            btnDec = document.querySelector('.btn-decrypt'),
+            btnEnc = document.querySelector('.btn-encrypt');
+
+        btnEnc.addEventListener('click', function(e){
+            e.preventDefault();
+            var val = textEl.value;
+            var select = document.querySelector('[name="keys"]');
+            var ind = select.selectedIndex;
+            var key = PGP.keys[ind];
+
+            if(!key.pubkey){
+                PGP.showMsg('Public key missing')
+                return;
+            }
+
+            var options = {
+                data: val,
+                publicKeys: openpgp.key.readArmored(key.pubkey).keys
+            };
+            
+            openpgp.encrypt(options).then(function(ciphertext) {
+                textEl.value = ciphertext.data;
+            });
+        }, false);
+
+        btnDec.addEventListener('click', function(e){
+            e.preventDefault();
+            var val = textEl.value;
+
+            var select = document.querySelector('[name="keys"]');
+            var pass = document.querySelector('[name="password"]');
+            var ind = select.selectedIndex;
+            var key = PGP.keys[ind];
+            var password = pass.value;
+
+            if(!key.privkey){
+                PGP.showMsg('No private key');
+                return;
+            }
+
+            var selectedKey = openpgp.key.readArmored(key.privkey).keys[0];
+
+            if(selectedKey.decrypt(password)){
+                var options = {
+                    message: openpgp.message.readArmored(val),
+                    privateKey: selectedKey
+                };
+
+                openpgp.decrypt(options).then(function(plaintext) {
+                    textEl.value = plaintext.data;
+                });    
+            }
+            else {
+                PGP.showMsg('Failed to decrypt key!');
+            }
+        }, false);
+    }());
+    (function(){
+        /* Add new key */
+        var btnRead = document.querySelector('.btn-readkey'),
+            nameKeyEl = document.querySelector('[name="keyname"]'),
+            pubKeyEl = document.querySelector('[name="pubkey"]'),
+            privKeyEl = document.querySelector('[name="privkey"]');
+
+        btnRead.addEventListener('click', function(e){
+            e.preventDefault();
+
+            var pubkey = pubKeyEl.value,
+                privkey = privKeyEl.value,
+                keyname = nameKeyEl.value;
+            
+            if(keyname.length){
+                PGP.keys.push({
+                        name: keyname,
+                        privkey: privkey,
+                        pubkey: pubkey
+                    });
+
+                window.localStorage.keys = JSON.stringify(PGP.keys);
+                PGP.populateKeys();
+                PGP.showMsg('PGP key added');
+                PGP.CloseModal();
+            }
+        }, false);
+
+    }());
+    (function(){
+        /* Modal control */
+        var open = document.querySelector('.btn-open-modal'),
+            close = document.querySelector('.btn-close'),
+            modal = document.querySelector('.overlay');
+
+        var closeModal = PGP.CloseModal = function(e){
+                if(e){
+                    e.preventDefault();
+                }
+                modal.classList.remove('in');
+            },
+            openModal = PGP.OpenModal = function(e){
+                if(e){
+                    e.preventDefault();
+                }
+
+                modal.classList.add('in');
+            };
+
+        open.addEventListener('click', openModal, false);
+        close.addEventListener('click', closeModal, false);
+    }());
+    </script>
+</body>
+</html>
