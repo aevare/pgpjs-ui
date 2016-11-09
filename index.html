@@ -12,23 +12,37 @@
         }
         body {
             font-size: 16px;
-            font-family: Arial;
+            font-family: "Lucida Sans",LucidaSan-Rom,Arial,sans-serif;
             margin: 0;
+            background: #37373C;
+            color: #969697;
+        }
+        ::placeholder {
+            color: #A9A9A9;
+            font-weight: bold;
         }
         .top-bar {
             -webkit-user-select: none;
             -webkit-app-region: drag; 
             height: 50px;
             width: 100%; 
-            background: #2980B9;
+            background: #2B272C;
+            color: #FFF;
+            padding: 3px;
+        }
+        .top-bar img {
+            border-radius: 50%;
+            height: 45px;
+            display: inline-block;
         }
         .top-bar h1 {
-            background: url('pgp-keys.png') no-repeat 5px 5px transparent;
             background-size: 40px 40px;
             font-size: 24px;
             line-height: 50px;
             margin: 0;
-            padding: 0 12px 0 60px;
+            padding: 0 0 0 0;
+            display: inline-block;
+            vertical-align: top;
         }
         .btn-close-window {
             display: none;
@@ -58,8 +72,8 @@
         .input {
             line-height: 30px;
             padding: 0 12px;
-            background: #FFF;
-            border: 1px solid #333;
+            background: #FFFFFF;
+            border: 1px solid #e3e3e3;
             box-shadow: none;
             border-radius: 3px;
             min-width: 200px;
@@ -72,16 +86,19 @@
             width: 100%;
             min-height: 300px;
             line-height: 1.2em;
+            background: #FFFFFF;
         }
         .btn {
             display: inline-block;
             line-height: 30px;
             padding: 0 12px;
             margin: 0 5px 12px 0;
-            background: #FFF;
-            border: 1px solid #333;
+            background: #000;
+            border: 1px solid #062036;
             box-shadow: none;
             border-radius: 3px;
+            font-weight: bold;
+            color: #8e959b;
         }
         .overlay {
             position: absolute;
@@ -120,7 +137,7 @@
         .modal {
             display: block;
             margin: 50px auto;
-            background: #FFF;
+            background: #37373C;
             width: 60%;
             padding: 10px;
             border-radius: 3px;
@@ -135,6 +152,7 @@
 <body>
     <div class="top-bar">
         <button class="btn-close-window">x</button>
+        <img src="lock-red.png" />
         <h1>PGP UI</h1>
     </div>
     <div class="content">
@@ -143,7 +161,7 @@
             <select name="keys" class="input"></select> <button class="btn btn-open-add">+</button><button class="btn btn-open-gen">Generate</button><button class="btn btn-open-show">Show</button>
         </div>
         <div class="input-wrap">
-            <label>Password</label>
+            <label>Passphrase</label>
             <input type="password" name="password" class="input" />
         </div>
         <div class="input-wrap">
@@ -153,7 +171,7 @@
         <div class="message-box content-message"></div>
         <div class="input-wrap">
             <button class="btn btn-decrypt">Decrypt</button>
-            <button class="btn btn-encrypt">Encrpt</button>
+            <button class="btn btn-encrypt">Encrypt</button>
         </div>
     </div>
 
@@ -172,6 +190,7 @@
                 <label>Public key</label>
                 <textarea name="pubkey" class="input textarea"></textarea>
             </div>
+            <div class="message-box loadkey-message"></div>
             <div>
                 <button class="btn btn-readkey">Load key</button>
                 <button class="btn btn-close">Close</button>
@@ -192,7 +211,11 @@
             </div>
             <div class="input-wrap">
                 <label>Passphrase</label>
-                <input type="text" name="genpass" class="input" />
+                <input type="password" name="genpass" class="input" />
+            </div>
+            <div class="input-wrap">
+                <label>Passphrase again</label>
+                <input type="password" name="genpass2" class="input" />
             </div>
             <div class="message-box generate-message"></div>
             <div>
@@ -229,16 +252,22 @@
             App.quit();
         }, false);
         /* Message box */
-        PGP.showMsg = function(text, boxClass){
+        var timeoutId;
+        PGP.showMsg = function(text, boxClass, time){
+            if(timeoutId !== undefined){
+                clearTimeout(timeoutId);
+                timeoutId = undefined;
+            }
             boxClass = boxClass || '.content-message';
             var msgBox = document.querySelector(boxClass);
 
             msgBox.classList.add('in');
             msgBox.innerText = text;
-            setTimeout(function(){
+            timeoutId = setTimeout(function(){
                 msgBox.innerText = '';
                 msgBox.classList.remove('in');
-            }, 5000);
+                timeoutId = undefined;
+            }, time || 5000);
         }
         /* Populate keys */
         var keys = PGP.keys = window.localStorage.keys ? JSON.parse(window.localStorage.keys) : [];
@@ -267,9 +296,20 @@
     }());
     (function(){
         /* Encrypt / Decrypt message */
-        var textEl = document.querySelector('[name="message"]'),
+        var selectbox = document.querySelector('[name="keys"]'),
+            textEl = document.querySelector('[name="message"]'),
             btnDec = document.querySelector('.btn-decrypt'),
             btnEnc = document.querySelector('.btn-encrypt');
+
+        var toggleButtons = function(){
+                var ind = selectbox.selectedIndex;
+                var key = PGP.keys[ind];
+                btnEnc.style.display = !!key.pubkey ? 'inline-block' : 'none';
+                btnDec.style.display = !!key.privkey ? 'inline-block' : 'none';
+            };
+
+        selectbox.addEventListener('change', toggleButtons, false);
+        toggleButtons();
 
         btnEnc.addEventListener('click', function(e){
             e.preventDefault();
@@ -308,9 +348,14 @@
                 return;
             }
 
-            var selectedKey = openpgp.key.readArmored(key.privkey).keys[0];
+            var armouredKey = openpgp.key.readArmored(key.privkey)
 
-            if(selectedKey.decrypt(password)){
+            var selectedKey = armouredKey.keys[0];
+
+            if(!selectedKey){
+                PGP.showMsg('Failed to get key');
+            }
+            else if(selectedKey.decrypt(password)){
                 var options = {
                     message: openpgp.message.readArmored(val),
                     privateKey: selectedKey
@@ -321,7 +366,7 @@
                 });    
             }
             else {
-                PGP.showMsg('Failed to decrypt key!');
+                PGP.showMsg('Failed to decrypt key, wrong passphrase?');
             }
         }, false);
     }());
@@ -337,15 +382,20 @@
                 mail = mailEl.value,
                 passEl = document.querySelector('[name="genpass"]'),
                 pass = passEl.value;
+                passEl2 = document.querySelector('[name="genpass2"]'),
+                pass2 = passEl2.value;
 
-            if(name.length && mail.length && pass.length){
+            if(pass !== pass2){
+                PGP.showMsg('Passphrase missmatch', '.generate-message');
+            }
+            else if(name.length && mail.length && pass.length){
                 var options = {
                     userIds: [{ name: name, email: mail }],
                     numBits: 4096,
                     passphrase: pass
                 };
 
-                PGP.showMsg('Generating keys', '.generate-message');
+                PGP.showMsg('Generating keys.. this could take a while..', '.generate-message', 30000);
 
                 openpgp.generateKey(options).then(function(key) {
                     var privkey = key.privateKeyArmored;
@@ -356,7 +406,9 @@
                         privkey: privkey,
                         pubkey: pubkey
                     });
+
                     PGP.showMsg('Keys generated!', '.generate-message');
+                    PGP.CloseModal();
                 });
             }
             else {
@@ -379,7 +431,17 @@
                 privkey = privKeyEl.value,
                 keyname = nameKeyEl.value;
             
-            if(keyname.length){
+            if(keyname.length === 0){
+                PGP.showMsg('Key name missing', '.loadkey-message');
+            }
+            else if(pubkey.length === 0 || privkey.length === 0) {
+                PGP.showMsg('Public or private key must be added', '.loadkey-message');
+            } 
+            else {
+                pubKeyEl.value = '';
+                privKeyEl.value = '';
+                nameKeyEl.value = '';
+
                 PGP.addKey({
                         name: keyname,
                         privkey: privkey,
