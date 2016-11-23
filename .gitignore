@@ -1,1 +1,4 @@
 node_modules
+PGPui/platforms
+PGPui/plugins
+PGPui/hooks

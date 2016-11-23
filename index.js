@@ -1,11 +1,16 @@
 var http = require('http');
 var fs = require('fs');
 
+//TODO.. copy openpgpjs to js folder..
+
 http.createServer(function (req, res) {
 
     var resp;
     if(req.url === '/'){
        resp = fs.readFileSync('index.html');
+    }
+    if(req.url === '/js/openpgp.min.js'){
+        resp = fs.readFileSync('node_modules/openpgp/dist/openpgp.js');
     }
     else {
         try {

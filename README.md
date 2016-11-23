@@ -8,14 +8,15 @@ npm install
 
 ##Source code
 All code is in index.html, easily verifiable.
+openpgpjs source code is available at https://openpgpjs.org/
 
+###Copy to cordova folder
+```
+npm run build
+```
 
 ##Running
 With node.js
 ```
-node index.js
-```
-With Python
-```
-python -m SimpleHTTPServer 3000
+npm run start
 ```
